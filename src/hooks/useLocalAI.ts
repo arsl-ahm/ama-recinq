@@ -26,7 +26,7 @@ export function useLocalAI(options?: UseLocalAIOptions) {
         'text2text-generation',
         'Xenova/flan-t5-base',
         { 
-          device: 'cpu',
+          device: 'webgpu',
           dtype: 'fp32' // Better quality than quantized
         }
       );
