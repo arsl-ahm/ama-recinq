@@ -57,13 +57,23 @@ const Index = () => {
         
         answer = await generateResponse(currentQuestion, context);
       } else {
-        // Simple keyword-based response if no AI model
+        // Enhanced keyword-based response with better formatting
         if (sources && sources.length > 0) {
-          answer = `Based on the available information:\n\n${sources.map(source => 
-            `• ${source.title}: ${source.content.substring(0, 200)}...`
-          ).join('\n\n')}`;
+          const topSources = sources.slice(0, 3); // Get top 3 most relevant sources
+          answer = `Based on the Re:cinq knowledge base, here's what I found about "${currentQuestion}":\n\n` +
+            topSources.map((source, index) => 
+              `${index + 1}. **${source.title}**\n   ${source.content.substring(0, 300).trim()}...\n`
+            ).join('\n') +
+            '\n💡 *For more detailed AI-powered answers, load the AI assistant above.*';
         } else {
-          answer = "I found some relevant information, but for the best experience with AI-powered responses, please load the AI assistant above. For now, try rephrasing your question with different keywords.";
+          answer = `I couldn't find specific information about "${currentQuestion}" in the Re:cinq knowledge base.\n\n` +
+            `Re:cinq specializes in:\n` +
+            `• AI Native and Cloud Native technologies\n` +
+            `• Build Foundation services\n` +
+            `• Accelerate Software Delivery\n` +
+            `• Drive Strategic Growth\n` +
+            `• Waves of Innovation community\n\n` +
+            `Try rephrasing your question or load the AI assistant for smarter responses.`;
         }
       }
 

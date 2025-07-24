@@ -21,13 +21,13 @@ export function useLocalAI(options?: UseLocalAIOptions) {
       setIsLoading(true);
       options?.onProgress?.('Loading AI model (this may take a minute)...');
       
-      // Use the smallest available model for faster loading
+      // Use a better model for longer, more coherent responses
       generatorRef.current = await pipeline(
         'text2text-generation',
-        'Xenova/flan-t5-small',
+        'Xenova/flan-t5-base',
         { 
-          device: 'cpu', // Use CPU to avoid WebGPU compatibility issues
-          dtype: 'q8' // Use quantized model for smaller size
+          device: 'cpu',
+          dtype: 'fp32' // Better quality than quantized
         }
       );
       
@@ -50,17 +50,18 @@ export function useLocalAI(options?: UseLocalAIOptions) {
     try {
       setIsLoading(true);
       
-      const prompt = `You are a helpful assistant for Re:cinq, a company specializing in AI Native and Cloud Native technologies.
+      const prompt = `Answer this question about Re:cinq in detail. Re:cinq is a company specializing in AI Native and Cloud Native technologies.
 
-Context: ${context}
+${context ? `Here is relevant information: ${context}` : ''}
 
 Question: ${question}
-Answer:`;
+Provide a comprehensive answer in 2-3 sentences:`;
 
       const result = await generatorRef.current(prompt, {
-        max_new_tokens: 150,
-        temperature: 0.3,
-        do_sample: false, // Use greedy decoding for faster generation
+        max_new_tokens: 300,
+        temperature: 0.7,
+        do_sample: true,
+        top_p: 0.9,
       });
 
       return result[0]?.generated_text || "I apologize, but I couldn't generate a response at this time.";
