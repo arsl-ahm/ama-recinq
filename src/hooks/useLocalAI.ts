@@ -19,13 +19,16 @@ export function useLocalAI(options?: UseLocalAIOptions) {
     
     try {
       setIsLoading(true);
-      options?.onProgress?.('Loading AI model...');
+      options?.onProgress?.('Loading AI model (this may take a minute)...');
       
-      // Use a smaller, efficient model for text generation
+      // Use the smallest available model for faster loading
       generatorRef.current = await pipeline(
         'text2text-generation',
         'Xenova/flan-t5-small',
-        { device: 'webgpu' }
+        { 
+          device: 'cpu', // Use CPU to avoid WebGPU compatibility issues
+          dtype: 'q8' // Use quantized model for smaller size
+        }
       );
       
       setIsInitialized(true);
@@ -55,9 +58,9 @@ Question: ${question}
 Answer:`;
 
       const result = await generatorRef.current(prompt, {
-        max_new_tokens: 256,
-        temperature: 0.7,
-        do_sample: true,
+        max_new_tokens: 150,
+        temperature: 0.3,
+        do_sample: false, // Use greedy decoding for faster generation
       });
 
       return result[0]?.generated_text || "I apologize, but I couldn't generate a response at this time.";

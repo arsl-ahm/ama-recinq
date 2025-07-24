@@ -31,7 +31,7 @@ const Index = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!question.trim() || isLoading || !isInitialized) return;
+    if (!question.trim() || isLoading) return;
 
     const currentQuestion = question.trim();
     setQuestion('');
@@ -47,13 +47,25 @@ const Index = () => {
         console.error('Error searching knowledge sources:', sourcesError);
       }
 
-      // Create context from relevant sources
-      const context = sources?.map(source => 
-        `Source: ${source.title} (${source.url})\nContent: ${source.content}`
-      ).join('\n\n') || '';
+      let answer = '';
 
-      // Generate response using local AI
-      const answer = await generateResponse(currentQuestion, context);
+      if (isInitialized) {
+        // Use AI if model is loaded
+        const context = sources?.map(source => 
+          `Source: ${source.title} (${source.url})\nContent: ${source.content}`
+        ).join('\n\n') || '';
+        
+        answer = await generateResponse(currentQuestion, context);
+      } else {
+        // Simple keyword-based response if no AI model
+        if (sources && sources.length > 0) {
+          answer = `Based on the available information:\n\n${sources.map(source => 
+            `• ${source.title}: ${source.content.substring(0, 200)}...`
+          ).join('\n\n')}`;
+        } else {
+          answer = "I found some relevant information, but for the best experience with AI-powered responses, please load the AI assistant above. For now, try rephrasing your question with different keywords.";
+        }
+      }
 
       const newMessage: Message = {
         id: crypto.randomUUID(),
@@ -103,32 +115,43 @@ const Index = () => {
           <div className="text-center mb-4">
             {!isInitialized ? (
               loadingProgress ? (
-                <p className="text-sm text-muted-foreground">
-                  <Loader2 className="inline-block w-4 h-4 mr-2 animate-spin" />
-                  {loadingProgress}
-                </p>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    <Loader2 className="inline-block w-4 h-4 mr-2 animate-spin" />
+                    {loadingProgress}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    First-time setup downloads a small AI model (~50MB). This enables completely free, offline responses.
+                  </p>
+                </div>
               ) : (
-                <Button 
-                  onClick={initializeModel}
-                  disabled={isLoading}
-                  className="mb-4"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Loading AI Model...
-                    </>
-                  ) : (
-                    "Initialize AI Assistant"
-                  )}
-                </Button>
+                <div className="space-y-4">
+                  <Button 
+                    onClick={initializeModel}
+                    disabled={isLoading}
+                    className="mb-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Loading AI Model...
+                      </>
+                    ) : (
+                      "🤖 Load Free AI Assistant"
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                    This downloads a small AI model to your browser for completely free, private responses. 
+                    Or you can ask questions using simple keyword matching below.
+                  </p>
+                </div>
               )
             ) : null}
           </div>
           <p className="text-lg text-muted-foreground">
             {isInitialized ? 
-              "Ask me anything about Re:cinq's AI Native and Cloud Native expertise" :
-              "Click the button above to load the AI model and start asking questions"
+              "🚀 AI Assistant ready! Ask me anything about Re:cinq" :
+              "Choose AI mode above or ask questions using keyword search below"
             }
           </p>
         </div>
@@ -142,9 +165,9 @@ const Index = () => {
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="What would you like to know about Re:cinq?"
                 className="flex-1"
-                disabled={isLoading || !isInitialized}
+                disabled={isLoading}
               />
-              <Button type="submit" disabled={isLoading || !question.trim() || !isInitialized}>
+              <Button type="submit" disabled={isLoading || !question.trim()}>
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
