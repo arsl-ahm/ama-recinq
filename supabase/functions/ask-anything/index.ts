@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+const huggingFaceApiKey = Deno.env.get('HUGGING_FACE_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -18,8 +18,8 @@ serve(async (req) => {
   }
 
   try {
-    if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
+    if (!huggingFaceApiKey) {
+      throw new Error('Hugging Face API key not configured');
     }
 
     const { question, sessionId } = await req.json();
@@ -48,19 +48,15 @@ serve(async (req) => {
       `Source: ${source.title} (${source.url})\nContent: ${source.content}`
     ).join('\n\n') || '';
 
-    // Call OpenAI with context
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Call Hugging Face with context
+    const response = await fetch('https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
+        'Authorization': `Bearer ${huggingFaceApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a knowledgeable assistant for Re:cinq, a company specializing in AI Native and Cloud Native technologies. 
+        inputs: `Context: ${context}\n\nYou are a knowledgeable assistant for Re:cinq, a company specializing in AI Native and Cloud Native technologies. 
 
 About Re:cinq:
 - They help businesses integrate AI and Cloud Native technologies
@@ -68,27 +64,24 @@ About Re:cinq:
 - They have a community called "Waves of Innovation" with newsletter, podcast, and resources
 - They focus on the transition from Cloud Native to AI Native
 
-Use the following context to answer questions about Re:cinq accurately. If you don't know something based on the context, say so clearly.
+Use the context provided to answer questions about Re:cinq accurately. If you don't know something based on the context, say so clearly.
 
-Context:
-${context}`
-          },
-          {
-            role: 'user',
-            content: question
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
+Question: ${question}
+Answer:`,
+        parameters: {
+          max_length: 1000,
+          temperature: 0.7,
+          return_full_text: false
+        }
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      throw new Error(`Hugging Face API error: ${response.statusText}`);
     }
 
     const data = await response.json();
-    const answer = data.choices[0].message.content;
+    const answer = Array.isArray(data) ? data[0]?.generated_text || 'No response generated' : data.generated_text || 'No response generated';
 
     // Store the conversation
     const sourceIds = sources?.map(s => s.id) || [];
