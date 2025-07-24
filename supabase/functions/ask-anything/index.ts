@@ -48,15 +48,8 @@ serve(async (req) => {
       `Source: ${source.title} (${source.url})\nContent: ${source.content}`
     ).join('\n\n') || '';
 
-    // Call Hugging Face with context
-    const response = await fetch('https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${huggingFaceApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        inputs: `Context: ${context}\n\nYou are a knowledgeable assistant for Re:cinq, a company specializing in AI Native and Cloud Native technologies. 
+    // Call Hugging Face with context - using a free text generation model
+    const prompt = `You are a knowledgeable assistant for Re:cinq, a company specializing in AI Native and Cloud Native technologies.
 
 About Re:cinq:
 - They help businesses integrate AI and Cloud Native technologies
@@ -64,12 +57,22 @@ About Re:cinq:
 - They have a community called "Waves of Innovation" with newsletter, podcast, and resources
 - They focus on the transition from Cloud Native to AI Native
 
-Use the context provided to answer questions about Re:cinq accurately. If you don't know something based on the context, say so clearly.
+Context from knowledge base:
+${context}
 
 Question: ${question}
-Answer:`,
+Answer:`;
+
+    const response = await fetch('https://api-inference.huggingface.co/models/google/flan-t5-base', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${huggingFaceApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: prompt,
         parameters: {
-          max_length: 1000,
+          max_new_tokens: 500,
           temperature: 0.7,
           return_full_text: false
         }
@@ -77,11 +80,25 @@ Answer:`,
     });
 
     if (!response.ok) {
-      throw new Error(`Hugging Face API error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('Hugging Face API error details:', errorText);
+      throw new Error(`Hugging Face API error: ${response.statusText} - ${errorText}`);
     }
 
     const data = await response.json();
-    const answer = Array.isArray(data) ? data[0]?.generated_text || 'No response generated' : data.generated_text || 'No response generated';
+    console.log('Hugging Face response:', data);
+    
+    let answer = 'I apologize, but I could not generate a response at this time.';
+    
+    if (Array.isArray(data) && data.length > 0) {
+      if (data[0].generated_text) {
+        answer = data[0].generated_text;
+      } else if (data[0].summary_text) {
+        answer = data[0].summary_text;
+      }
+    } else if (data.generated_text) {
+      answer = data.generated_text;
+    }
 
     // Store the conversation
     const sourceIds = sources?.map(s => s.id) || [];
