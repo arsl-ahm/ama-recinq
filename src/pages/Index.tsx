@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Send, Brain, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useLocalAI } from "@/hooks/useLocalAI";
 
 interface Message {
   id: string;
@@ -22,36 +23,62 @@ interface Message {
 const Index = () => {
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState<string>("");
   const { toast } = useToast();
+  const { generateResponse, isLoading, isInitialized, initializeModel } = useLocalAI({
+    onProgress: setLoadingProgress
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!question.trim() || isLoading) return;
+    if (!question.trim() || isLoading || !isInitialized) return;
 
     const currentQuestion = question.trim();
     setQuestion('');
-    setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('ask-anything', {
-        body: { 
-          question: currentQuestion,
-          sessionId: crypto.randomUUID()
-        }
-      });
+      // Search for relevant knowledge from our sources
+      const { data: sources, error: sourcesError } = await supabase
+        .from('knowledge_sources')
+        .select('*')
+        .textSearch('content', currentQuestion, { type: 'websearch' });
 
-      if (error) throw error;
+      if (sourcesError) {
+        console.error('Error searching knowledge sources:', sourcesError);
+      }
+
+      // Create context from relevant sources
+      const context = sources?.map(source => 
+        `Source: ${source.title} (${source.url})\nContent: ${source.content}`
+      ).join('\n\n') || '';
+
+      // Generate response using local AI
+      const answer = await generateResponse(currentQuestion, context);
 
       const newMessage: Message = {
         id: crypto.randomUUID(),
         question: currentQuestion,
-        answer: data.answer,
-        sources: data.sources,
+        answer,
+        sources: sources || [],
         timestamp: new Date(),
       };
 
       setMessages(prev => [...prev, newMessage]);
+
+      // Store the conversation
+      const sourceIds = sources?.map(s => s.id) || [];
+      const { error: insertError } = await supabase
+        .from('conversations')
+        .insert({
+          question: currentQuestion,
+          answer,
+          sources_used: sourceIds,
+          session_id: crypto.randomUUID(),
+        });
+
+      if (insertError) {
+        console.error('Error storing conversation:', insertError);
+      }
     } catch (error) {
       console.error('Error asking question:', error);
       toast({
@@ -59,8 +86,6 @@ const Index = () => {
         description: "Failed to get an answer. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -75,8 +100,36 @@ const Index = () => {
               Re:cinq Knowledge Base
             </h1>
           </div>
+          <div className="text-center mb-4">
+            {!isInitialized ? (
+              loadingProgress ? (
+                <p className="text-sm text-muted-foreground">
+                  <Loader2 className="inline-block w-4 h-4 mr-2 animate-spin" />
+                  {loadingProgress}
+                </p>
+              ) : (
+                <Button 
+                  onClick={initializeModel}
+                  disabled={isLoading}
+                  className="mb-4"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading AI Model...
+                    </>
+                  ) : (
+                    "Initialize AI Assistant"
+                  )}
+                </Button>
+              )
+            ) : null}
+          </div>
           <p className="text-lg text-muted-foreground">
-            Ask me anything about Re:cinq's AI Native and Cloud Native expertise
+            {isInitialized ? 
+              "Ask me anything about Re:cinq's AI Native and Cloud Native expertise" :
+              "Click the button above to load the AI model and start asking questions"
+            }
           </p>
         </div>
 
@@ -89,9 +142,9 @@ const Index = () => {
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="What would you like to know about Re:cinq?"
                 className="flex-1"
-                disabled={isLoading}
+                disabled={isLoading || !isInitialized}
               />
-              <Button type="submit" disabled={isLoading || !question.trim()}>
+              <Button type="submit" disabled={isLoading || !question.trim() || !isInitialized}>
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
